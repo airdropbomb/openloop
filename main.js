@@ -11,30 +11,39 @@ const getRandomQuality = () => {
 };
 
 const getProxies = () => {
-    return fs.readFileSync('proxy.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
+    try {
+        return fs.readFileSync('proxy.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
+    } catch (error) {
+        logger('No proxy.txt found or empty. Proceeding without proxies.', 'warn');
+        return [];
+    }
 };
 
 const getTokens = () => {
     return fs.readFileSync('token.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
 };
 
-const shareBandwidth = async (token, proxy) => {
+const shareBandwidth = async (token, proxy = null) => {
     const quality = getRandomQuality();
-    const proxyAgent = new HttpsProxyAgent(proxy);
+    const fetchOptions = {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ quality }),
+    };
+
+    if (proxy) {
+        fetchOptions.agent = new HttpsProxyAgent(proxy);
+    }
+
     const maxRetries = 5;
     let attempt = 0;
 
     while (attempt < maxRetries) {
         try {
-            const response = await fetch('https://api.openloop.so/bandwidth/share', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ quality }),
-                agent: proxyAgent,
-            });
+            const response = await fetch('https://api.openloop.so/bandwidth/share', fetchOptions);
 
             if (!response.ok) {
                 throw new Error(`Failed to share bandwidth! Status: ${response.statusText}`);
@@ -66,18 +75,21 @@ const shareBandwidth = async (token, proxy) => {
 
 let intervalId;
 
-const checkMissions = async (token, proxy) => {
-    try {
-        const proxyAgent = new HttpsProxyAgent(proxy);
+const checkMissions = async (token, proxy = null) => {
+    const fetchOptions = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+    };
 
-        const response = await fetch('https://api.openloop.so/missions', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            agent: proxyAgent,
-        });
+    if (proxy) {
+        fetchOptions.agent = new HttpsProxyAgent(proxy);
+    }
+
+    try {
+        const response = await fetch('https://api.openloop.so/missions', fetchOptions);
 
         if (response.status === 401) {
             logger('Token is expired. Trying to get a new token...', 'warn');
@@ -108,7 +120,8 @@ const shareBandwidthForAllTokens = async () => {
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        const proxy = proxies[i % proxies.length];
+        const proxy = proxies.length > 0 ? proxies[i % proxies.length] : null;
+
         try {
             const response = await checkMissions(token, proxy);
             if (response && Array.isArray(response.missions)) {
@@ -135,18 +148,21 @@ const shareBandwidthForAllTokens = async () => {
     }
 };
 
-const doMissions = async (missionId, token, proxy) => {
-    try {
-        const proxyAgent = new HttpsProxyAgent(proxy);
+const doMissions = async (missionId, token, proxy = null) => {
+    const fetchOptions = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+    };
 
-        const response = await fetch(`https://api.openloop.so/missions/${missionId}/complete`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            agent: proxyAgent,
-        });
+    if (proxy) {
+        fetchOptions.agent = new HttpsProxyAgent(proxy);
+    }
+
+    try {
+        const response = await fetch(`https://api.openloop.so/missions/${missionId}/complete`, fetchOptions);
 
         if (!response.ok) {
             throw new Error(`Failed to Complete Missions! Status: ${response.statusText}`);
