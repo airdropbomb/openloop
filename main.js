@@ -162,7 +162,7 @@ const shareBandwidthForAllTokens = async () => {
         }
 
         // Add delay between accounts to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 10000)); // 10 seconds delay
+        await new Promise((resolve) => setTimeout(resolve, 60000)); // 60 seconds delay
     }
 };
 
