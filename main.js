@@ -133,7 +133,7 @@ const shareBandwidthForAllTokens = async () => {
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
         const proxy = proxies.length > 0 ? proxies[i % proxies.length] : null;
-        const accountIndex = i + 1; // Account numbering starts from 1
+        const accountIndex = i + 1;
 
         logger(`[Account ${accountIndex}] Processing token: ${token.slice(0, 10)}...`, 'info');
 
@@ -160,6 +160,9 @@ const shareBandwidthForAllTokens = async () => {
         } catch (error) {
             logger(`[Account ${accountIndex}] Error processing token: ${token.slice(0, 10)}..., Error: ${error.message}`, 'error');
         }
+
+        // Add delay between accounts to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 seconds delay
     }
 };
 
