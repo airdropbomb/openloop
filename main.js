@@ -20,10 +20,15 @@ const getProxies = () => {
 };
 
 const getTokens = () => {
-    return fs.readFileSync('token.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
+    try {
+        return fs.readFileSync('token.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
+    } catch (error) {
+        logger('No token.txt found or empty.', 'warn');
+        return [];
+    }
 };
 
-const shareBandwidth = async (token, proxy = null) => {
+const shareBandwidth = async (token, proxy = null, accountIndex) => {
     const quality = getRandomQuality();
     const fetchOptions = {
         method: 'POST',
@@ -55,7 +60,7 @@ const shareBandwidth = async (token, proxy = null) => {
                 if (response && response.data && response.data.balances) {
                     const balance = response.data.balances.POINT;
                     logger(
-                        `Bandwidth shared Message: ${chalk.yellow(response.message)} | Score: ${chalk.yellow(quality)} | Total Earnings: ${chalk.yellow(balance)}`
+                        `[Account ${accountIndex}] Bandwidth shared Message: ${chalk.yellow(response.message)} | Score: ${chalk.yellow(quality)} | Total Earnings: ${chalk.yellow(balance)}`
                     );
                 }
             };
@@ -65,7 +70,7 @@ const shareBandwidth = async (token, proxy = null) => {
         } catch (error) {
             attempt++;
             if (attempt >= maxRetries) {
-                logger(`Max retries reached. Skipping.`, 'error');
+                logger(`[Account ${accountIndex}] Max retries reached. Skipping.`, 'error');
             } else {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
             }
@@ -75,7 +80,7 @@ const shareBandwidth = async (token, proxy = null) => {
 
 let intervalId;
 
-const checkMissions = async (token, proxy = null) => {
+const checkMissions = async (token, proxy = null, accountIndex) => {
     const fetchOptions = {
         method: 'GET',
         headers: {
@@ -92,7 +97,7 @@ const checkMissions = async (token, proxy = null) => {
         const response = await fetch('https://api.openloop.so/missions', fetchOptions);
 
         if (response.status === 401) {
-            logger('Token is expired. Trying to get a new token...', 'warn');
+            logger(`[Account ${accountIndex}] Token is expired. Trying to get a new token...`, 'warn');
             clearInterval(intervalId);
 
             await getToken();
@@ -106,7 +111,7 @@ const checkMissions = async (token, proxy = null) => {
         return data.data;
 
     } catch (error) {
-        logger('Error Fetching Missions!', 'error', error);
+        logger(`[Account ${accountIndex}] Error Fetching Missions!`, 'error', error);
     }
 };
 
@@ -118,37 +123,47 @@ const shareBandwidthForAllTokens = async () => {
     const tokens = getTokens();
     const proxies = getProxies();
 
+    if (tokens.length === 0) {
+        logger('No tokens available in token.txt.', 'error');
+        return;
+    }
+
+    logger(`Starting process for ${tokens.length} accounts...`, 'info');
+
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
         const proxy = proxies.length > 0 ? proxies[i % proxies.length] : null;
+        const accountIndex = i + 1; // Account numbering starts from 1
+
+        logger(`[Account ${accountIndex}] Processing token: ${token.slice(0, 10)}...`, 'info');
 
         try {
-            const response = await checkMissions(token, proxy);
+            const response = await checkMissions(token, proxy, accountIndex);
             if (response && Array.isArray(response.missions)) {
                 const availableMissionIds = response.missions
                     .filter(mission => mission.status === 'available')
                     .map(mission => mission.missionId);
 
-                logger('Available Missions:', 'info', availableMissionIds.length);
+                logger(`[Account ${accountIndex}] Available Missions: ${availableMissionIds.length}`, 'info');
                 for (const missionId of availableMissionIds) {
-                    logger(`Do and complete mission Id: ${missionId}`, 'info');
-                    const completeMission = await doMissions(missionId, token, proxy);
-                    logger(`Mission Id: ${missionId} Complete: ${completeMission.message}`);
+                    logger(`[Account ${accountIndex}] Do and complete mission Id: ${missionId}`, 'info');
+                    const completeMission = await doMissions(missionId, token, proxy, accountIndex);
+                    logger(`[Account ${accountIndex}] Mission Id: ${missionId} Complete: ${completeMission.message}`);
                 }
             }
         } catch (error) {
-            logger('Error checking missions:', 'error', error);
+            logger(`[Account ${accountIndex}] Error checking missions:`, 'error', error);
         }
 
         try {
-            await shareBandwidth(token, proxy);
+            await shareBandwidth(token, proxy, accountIndex);
         } catch (error) {
-            logger(`Error processing token: ${token}, Error: ${error.message}`, 'error');
+            logger(`[Account ${accountIndex}] Error processing token: ${token.slice(0, 10)}..., Error: ${error.message}`, 'error');
         }
     }
 };
 
-const doMissions = async (missionId, token, proxy = null) => {
+const doMissions = async (missionId, token, proxy = null, accountIndex) => {
     const fetchOptions = {
         method: 'GET',
         headers: {
@@ -172,7 +187,7 @@ const doMissions = async (missionId, token, proxy = null) => {
         return data;
 
     } catch (error) {
-        logger('Error Complete Missions!', 'error', error);
+        logger(`[Account ${accountIndex}] Error Complete Missions!`, 'error', error);
     }
 };
 
