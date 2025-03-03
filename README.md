@@ -41,7 +41,7 @@ put your proxy in file `proxy.txt` format `http://username:pass@ip:port`
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/Zlkcyber/openloop.git
+   git clone https://github.com/airdropbomb/openloop.git
    cd openloop
    ```
 2. Install dependencies:
